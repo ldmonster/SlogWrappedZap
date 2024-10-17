@@ -2,10 +2,10 @@ package zap
 
 import (
 	"context"
+	"log/slog"
 
 	uberzap "go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	"golang.org/x/exp/slog"
 )
 
 // Extends default slog with new log levels
