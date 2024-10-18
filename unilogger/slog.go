@@ -1,4 +1,4 @@
-package slog
+package unilogger
 
 import (
 	"bytes"
@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	logContext "slog-test/slog/context"
+	logContext "slog-test/unilogger/context"
 )
 
 // Extends default slog with new log levels
@@ -36,6 +36,8 @@ type SlogHandler struct {
 	w io.Writer
 	b *bytes.Buffer
 	m *sync.Mutex
+
+	timeFn func(t time.Time) time.Time
 }
 
 func NewSlogHandler(handler slog.Handler) *SlogHandler {
@@ -81,7 +83,7 @@ func (h *SlogHandler) Handle(ctx context.Context, r slog.Record) error {
 	// HEAD start
 	var headLogFields []string
 	lvl := fmt.Sprintf(`"level":"%s"`, strings.ToLower(Level(r.Level).String()))
-	time := fmt.Sprintf(`"time":"%s"`, r.Time.Format(time.RFC3339))
+	time := fmt.Sprintf(`"time":"%s"`, h.timeFn(r.Time).Format(time.RFC3339))
 	msg := fmt.Sprintf(`"msg":"%s"`, r.Message)
 
 	headLogFields = append(headLogFields, lvl)
@@ -162,7 +164,7 @@ func (h *SlogHandler) WithGroup(name string) slog.Handler {
 	return &h2
 }
 
-func NewHandler(out io.Writer, opts *slog.HandlerOptions) *SlogHandler {
+func NewHandler(out io.Writer, opts *slog.HandlerOptions, timeFn func(t time.Time) time.Time) *SlogHandler {
 	b := new(bytes.Buffer)
 
 	return &SlogHandler{
@@ -170,5 +172,6 @@ func NewHandler(out io.Writer, opts *slog.HandlerOptions) *SlogHandler {
 		b:       b,
 		m:       &sync.Mutex{},
 		w:       out,
+		timeFn:  timeFn,
 	}
 }

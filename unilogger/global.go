@@ -1,11 +1,11 @@
-package slog
+package unilogger
 
 import (
 	"context"
 	"fmt"
 	"log/slog"
 	"os"
-	logContext "slog-test/slog/context"
+	logContext "slog-test/unilogger/context"
 	"sync/atomic"
 )
 

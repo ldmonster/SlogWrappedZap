@@ -1,4 +1,4 @@
-package slog
+package unilogger
 
 import (
 	"context"
@@ -10,8 +10,9 @@ import (
 	"path/filepath"
 	"runtime/debug"
 	"strings"
+	"time"
 
-	logContext "slog-test/slog/context"
+	logContext "slog-test/unilogger/context"
 )
 
 type logger = slog.Logger
@@ -33,6 +34,8 @@ type Options struct {
 	AddSource bool
 	Level     slog.Level
 	Output    io.Writer
+
+	TimeFunc func(t time.Time) time.Time
 }
 
 func NewNop() *Logger {
@@ -44,6 +47,12 @@ func NewNop() *Logger {
 func NewLogger(opts Options) *Logger {
 	if opts.Output == nil {
 		opts.Output = os.Stdout
+	}
+
+	if opts.TimeFunc == nil {
+		opts.TimeFunc = func(t time.Time) time.Time {
+			return t
+		}
 	}
 
 	l := &Logger{
@@ -84,7 +93,7 @@ func NewLogger(opts Options) *Logger {
 		},
 	}
 
-	l.slogHandler = NewHandler(opts.Output, handlerOpts)
+	l.slogHandler = NewHandler(opts.Output, handlerOpts, opts.TimeFunc)
 
 	l.logger = slog.New(l.slogHandler.WithAttrs(nil))
 

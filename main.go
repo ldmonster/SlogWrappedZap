@@ -4,7 +4,7 @@ import (
 	"fmt"
 	stdslog "log/slog"
 
-	"slog-test/slog"
+	"slog-test/unilogger"
 )
 
 func main() {
@@ -12,34 +12,34 @@ func main() {
 }
 
 func initWrappedSlogSlog() {
-	logger := slog.NewLogger(slog.Options{
-		Level: slog.LevelInfo.Level(),
+	logger := unilogger.NewLogger(unilogger.Options{
+		Level: unilogger.LevelInfo.Level(),
 		// Output: os.Stdout,
 	})
 	// newLogger := logger.WithGroup("module")
 
-	// slog.SetDefault(logger)
+	// unilogger.SetDefault(logger)
 
 	fmt.Println("INFO LEVEL")
-	slog.Debug("we cant see dat", "int attr", 42, stdslog.String("str arg", "lol"))
-	slog.Info("we can see dat", "int attr", 42, stdslog.String("str arg", "lol"))
-	slog.Warn("we can see dat", "int attr", 42, stdslog.String("str arg", "lol"))
-	slog.Error("we can see dat", "int attr", 42, stdslog.String("str arg", "lol"))
+	unilogger.Debug("we cant see dat", "int attr", 42, stdslog.String("str arg", "lol"))
+	unilogger.Info("we can see dat", "int attr", 42, stdslog.String("str arg", "lol"))
+	unilogger.Warn("we can see dat", "int attr", 42, stdslog.String("str arg", "lol"))
+	unilogger.Error("we can see dat", "int attr", 42, stdslog.String("str arg", "lol"))
 
-	slog.SetDefaultLevel(slog.LevelDebug)
+	unilogger.SetDefaultLevel(unilogger.LevelDebug)
 	fmt.Println("DEBUG LEVEL")
-	slog.Debug("we can see dat", "int attr", 42, stdslog.String("str arg", "lol"))
-	slog.Info("we can see dat" /* "int attr", 42, stdslog.String("str arg", "lol")*/)
-	slog.Warn("we can see dat", "int attr", 42, stdslog.String("str arg", "lol"))
-	slog.Error("we can see dat", "int attr", 42, stdslog.String("str arg", "lol"))
+	unilogger.Debug("we can see dat", "int attr", 42, stdslog.String("str arg", "lol"))
+	unilogger.Info("we can see dat" /* "int attr", 42, stdslog.String("str arg", "lol")*/)
+	unilogger.Warn("we can see dat", "int attr", 42, stdslog.String("str arg", "lol"))
+	unilogger.Error("we can see dat", "int attr", 42, stdslog.String("str arg", "lol"))
 
-	slog.SetDefaultLevel(slog.LevelError)
+	unilogger.SetDefaultLevel(unilogger.LevelError)
 	fmt.Println("ERROR LEVEL")
-	slog.Debug("we cant see dat", "int attr", 42, stdslog.String("str arg", "lol"))
-	slog.Info("we cant see dat", "int attr", 42, stdslog.String("str arg", "lol"))
-	slog.Warn("we cant see dat", "int attr", 42, stdslog.String("str arg", "lol"))
-	slog.Error("we can see dat", "int attr", 42, stdslog.String("str arg", "lol"))
-	slog.Fatal("we can see dat", "int attr", 42, stdslog.String("str arg", "lol"))
+	unilogger.Debug("we cant see dat", "int attr", 42, stdslog.String("str arg", "lol"))
+	unilogger.Info("we cant see dat", "int attr", 42, stdslog.String("str arg", "lol"))
+	unilogger.Warn("we cant see dat", "int attr", 42, stdslog.String("str arg", "lol"))
+	unilogger.Error("we can see dat", "int attr", 42, stdslog.String("str arg", "lol"))
+	unilogger.Fatal("we can see dat", "int attr", 42, stdslog.String("str arg", "lol"))
 
 	first := logger.Named("first")
 	second := first.Named("second")
