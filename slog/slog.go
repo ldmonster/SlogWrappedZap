@@ -1,203 +1,174 @@
 package slog
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
 	"runtime"
+	"strings"
+	"sync"
 	"time"
+
+	logContext "slog-test/slog/context"
 )
 
-type logger = slog.Logger
-
-type Logger struct {
-	*logger
-
-	level *Level
+// Extends default slog with new log levels
+type WrappedLogger struct {
+	*slog.Logger
+	opts *slog.HandlerOptions
 }
 
-type HandlerType int
-
-const (
-	JSONHandler HandlerType = iota
-	TextHandler
-)
-
-func New(w io.Writer, ht HandlerType, level Level) *Logger {
-	var logger = &Logger{
-		level: &level,
-	}
-
-	switch ht {
-	case JSONHandler:
-		logger.logger = slog.New(slog.NewJSONHandler(w, GetSlogOpts(logger.level)))
-	case TextHandler:
-		logger.logger = slog.New(slog.NewTextHandler(w, GetSlogOpts(logger.level)))
-	}
-
-	return logger
-}
-
-func (l *Logger) log(ctx context.Context, level Level, msg string, args ...any) {
-	if !l.Enabled(ctx, slog.Level(level)) {
-		return
-	}
-	var pc uintptr
-
-	var pcs [1]uintptr
-	// skip [runtime.Callers, this function, this function's caller]
-	runtime.Callers(3, pcs[:])
-	pc = pcs[0]
-
-	r := slog.NewRecord(time.Now(), slog.Level(level), msg, pc)
-	r.Add(args...)
-	if ctx == nil {
-		ctx = context.Background()
-	}
-
-	_ = l.Handler().Handle(ctx, r)
-}
-
-func (l *Logger) logf(ctx context.Context, level Level, format string, args ...any) {
-	msg := fmt.Sprintf(format, args...)
-
-	if !l.Enabled(ctx, slog.Level(level)) {
-		return
-	}
-	var pc uintptr
-
-	var pcs [1]uintptr
-	// skip [runtime.Callers, this function, this function's caller]
-	runtime.Callers(3, pcs[:])
-	pc = pcs[0]
-
-	r := slog.NewRecord(time.Now(), slog.Level(level), msg, pc)
-	r.Add(args...)
-	if ctx == nil {
-		ctx = context.Background()
-	}
-
-	_ = l.Handler().Handle(ctx, r)
-}
-
-func (l *Logger) logAttrs(ctx context.Context, level Level, msg string, attrs ...slog.Attr) {
-	if !l.Enabled(ctx, slog.Level(level)) {
-		return
-	}
-	var pc uintptr
-	var pcs [1]uintptr
-	// skip [runtime.Callers, this function, this function's caller]
-	runtime.Callers(3, pcs[:])
-	pc = pcs[0]
-
-	r := slog.NewRecord(time.Now(), slog.Level(level), msg, pc)
-	r.AddAttrs(attrs...)
-	if ctx == nil {
-		ctx = context.Background()
-	}
-
-	_ = l.Handler().Handle(ctx, r)
-}
-
-func (l *Logger) SetLevel(level Level) {
-	*l.level = level
-}
-
-func (l *Logger) With(args ...any) *Logger {
-	return &Logger{
-		logger: l.logger.With(args...),
-		level:  l.level,
+func NewSlogLogger(w io.Writer, opts *slog.HandlerOptions) *WrappedLogger {
+	return &WrappedLogger{
+		Logger: slog.New(slog.NewJSONHandler(w, opts)),
+		opts:   opts,
 	}
 }
 
-func (l *Logger) WithGroup(name string) *Logger {
-	return &Logger{
-		logger: l.logger.WithGroup(name),
-		level:  l.level,
+var _ slog.Handler = (*SlogHandler)(nil)
+
+type SlogHandler struct {
+	slog.Handler
+
+	w io.Writer
+	b *bytes.Buffer
+	m *sync.Mutex
+}
+
+func NewSlogHandler(handler slog.Handler) *SlogHandler {
+	return &SlogHandler{
+		Handler: handler,
 	}
 }
 
-func (l *Logger) Log(ctx context.Context, level Level, msg string, args ...any) {
-	l.log(ctx, level, msg, args...)
+func (h *SlogHandler) Handle(ctx context.Context, r slog.Record) error {
+	h.m.Lock()
+
+	defer func() {
+		h.b.Reset()
+		h.m.Unlock()
+	}()
+
+	var (
+		fields   = make(map[string]interface{}, r.NumAttrs())
+		out      []byte
+		tracePtr *string
+	)
+
+	isCustom := logContext.GetCustomKeyContext(ctx)
+	if isCustom {
+		r.PC, _, _, _ = runtime.Caller(4)
+
+		tracePtr = logContext.GetStackTraceContext(ctx)
+	}
+
+	if err := h.Handler.Handle(ctx, r); err != nil {
+		return err
+	}
+
+	attrs := map[string]any{}
+	if err := json.Unmarshal(h.b.Bytes(), &attrs); err != nil {
+		return err
+	}
+
+	for k, v := range attrs {
+		fields[k] = v
+	}
+
+	// HEAD start
+	var headLogFields []string
+	lvl := fmt.Sprintf(`"level":"%s"`, strings.ToLower(Level(r.Level).String()))
+	time := fmt.Sprintf(`"time":"%s"`, r.Time.Format(time.RFC3339))
+	msg := fmt.Sprintf(`"msg":"%s"`, r.Message)
+
+	headLogFields = append(headLogFields, lvl)
+
+	// if logger was named
+	loggerName, ok := fields["logger"]
+	if ok {
+		name := fmt.Sprintf(`"logger":"%s"`, loggerName)
+		headLogFields = append(headLogFields, name)
+
+		delete(fields, "logger")
+	}
+
+	headLogFields = append(headLogFields, msg)
+
+	// FOOT start
+	var footLogFields []string
+
+	// if logger was named
+	if tracePtr != nil {
+		trace := fmt.Sprintf(`"trace":"%s"`, *tracePtr)
+		footLogFields = append(footLogFields, trace)
+	}
+
+	footLogFields = append(footLogFields, time)
+
+	fieldSource, ok := fields["source"]
+	if ok {
+		src := fmt.Sprintf(`"source":"%s"`, fieldSource)
+		headLogFields = append(headLogFields, src)
+
+		delete(fields, "source")
+	}
+
+	b, err := json.Marshal(fields)
+	if err != nil {
+		return err
+	}
+
+	rawHeadLogFields := strings.Join(headLogFields, ",")
+	rawfootLogFields := strings.Join(footLogFields, ",")
+
+	out = append(out, '{')
+
+	out = append(out, []byte(rawHeadLogFields)...)
+
+	out = append(out, ',')
+
+	if len(fields) > 0 {
+		out = append(out, b[1:len(b)-1]...)
+		out = append(out, ',')
+	}
+
+	out = append(out, []byte(rawfootLogFields)...)
+
+	out = append(out, '}')
+
+	h.w.Write(append(out, "\n"...))
+
+	return nil
 }
 
-func (l *Logger) Logf(ctx context.Context, level Level, format string, args ...any) {
-	l.logf(ctx, level, format, args...)
+func (h *SlogHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	if len(attrs) < 1 {
+		return h
+	}
+
+	h2 := *h
+	h2.Handler = h.Handler.WithAttrs(attrs)
+
+	return &h2
 }
 
-func (l *Logger) LogAttrs(ctx context.Context, level Level, msg string, attrs ...slog.Attr) {
-	l.logAttrs(ctx, level, msg, attrs...)
+func (h *SlogHandler) WithGroup(name string) slog.Handler {
+	h2 := *h
+	h2.Handler = h.Handler.WithGroup(name)
+
+	return &h2
 }
 
-func (l *Logger) Trace(msg string, args ...any) {
-	l.log(context.Background(), LevelTrace, msg, args...)
-}
+func NewHandler(out io.Writer, opts *slog.HandlerOptions) *SlogHandler {
+	b := new(bytes.Buffer)
 
-func (l *Logger) Tracef(format string, args ...any) {
-	l.logf(context.Background(), LevelTrace, format, args...)
-}
-
-func (l *Logger) TraceContext(ctx context.Context, msg string, args ...any) {
-	l.log(ctx, LevelTrace, msg, args...)
-}
-
-func (l *Logger) Debug(msg string, args ...any) {
-	l.log(context.Background(), LevelDebug, msg, args...)
-}
-
-func (l *Logger) Debugf(format string, args ...any) {
-	l.logf(context.Background(), LevelDebug, format, args...)
-}
-
-func (l *Logger) DebugContext(ctx context.Context, msg string, args ...any) {
-	l.log(ctx, LevelDebug, msg, args...)
-}
-
-func (l *Logger) Info(msg string, args ...any) {
-	l.log(context.Background(), LevelInfo, msg, args...)
-}
-
-func (l *Logger) Infof(format string, args ...any) {
-	l.logf(context.Background(), LevelInfo, format, args...)
-}
-
-func (l *Logger) InfoContext(ctx context.Context, msg string, args ...any) {
-	l.log(ctx, LevelInfo, msg, args...)
-}
-
-func (l *Logger) Warn(msg string, args ...any) {
-	l.log(context.Background(), LevelWarn, msg, args...)
-}
-
-func (l *Logger) Warnf(format string, args ...any) {
-	l.logf(context.Background(), LevelWarn, format, args...)
-}
-
-func (l *Logger) WarnContext(ctx context.Context, msg string, args ...any) {
-	l.log(ctx, LevelWarn, msg, args...)
-}
-
-func (l *Logger) Error(msg string, args ...any) {
-	l.log(context.Background(), LevelError, msg, args...)
-}
-
-func (l *Logger) Errorf(format string, args ...any) {
-	l.logf(context.Background(), LevelError, format, args...)
-}
-
-func (l *Logger) ErrorContext(ctx context.Context, msg string, args ...any) {
-	l.log(ctx, LevelError, msg, args...)
-}
-
-func (l *Logger) Fatal(msg string, args ...any) {
-	l.log(context.Background(), LevelFatal, msg, args...)
-}
-
-func (l *Logger) Fatalf(format string, args ...any) {
-	l.logf(context.Background(), LevelFatal, format, args...)
-}
-
-func (l *Logger) FatalContext(ctx context.Context, msg string, args ...any) {
-	l.log(ctx, LevelFatal, msg, args...)
+	return &SlogHandler{
+		Handler: slog.NewJSONHandler(b, opts),
+		b:       b,
+		m:       &sync.Mutex{},
+		w:       out,
+	}
 }

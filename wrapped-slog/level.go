@@ -1,4 +1,4 @@
-package slog
+package wrappedslog
 
 import (
 	"fmt"
@@ -40,7 +40,7 @@ func (l Level) String() string {
 	case l < LevelError:
 		return str("warn", l-LevelWarn)
 	case l < LevelFatal:
-		return str("error", l-LevelError)
+		return str("error", l-LevelWarn)
 	default:
 		return str("fatal", l-LevelFatal)
 	}

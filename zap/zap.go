@@ -26,7 +26,7 @@ const (
 
 // Fatal logs at LevelFatal.
 func (l *WrappedLogger) Fatal(msg string, args ...any) {
-	l.Log(nil, LevelFatal, msg, args...)
+	l.Log(context.Background(), LevelFatal, msg, args...)
 }
 
 func NewZapLogger(logLevel string) (*uberzap.Logger, error) {

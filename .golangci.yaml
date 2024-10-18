@@ -1,0 +1,102 @@
+run:
+  timeout: 10m
+
+issues:
+  exclude:
+    - ST1005.*
+    - "should not use dot imports"
+    - "don't use an underscore in package name"
+    - "exported: .*"
+  exclude-dirs:
+    # this code has been copied from kubectl cli. No need to lint external code.
+    - go_lib/dependency/k8s/drain
+    # this code has been copied from kubernetes vertical-pod-autoscaler. No need to lint external code.
+    - modules/302-vertical-pod-autoscaler/hooks/internal/vertical-pod-autoscaler/v1
+
+linters-settings:
+  gci:
+    sections:
+      - standard
+      - default
+      - prefix(github.com/deckhouse/)
+  goimports:
+    local-prefixes: github.com/deckhouse/
+  errcheck:
+    ignore: fmt:.*,[rR]ead|[wW]rite|[cC]lose,io:Copy
+  sloglint:
+      # Enforce not mixing key-value pairs and attributes.
+      # https://github.com/go-simpler/sloglint?tab=readme-ov-file#no-mixed-arguments
+      # Default: true
+      no-mixed-args: true
+      # Enforce using key-value pairs only (overrides no-mixed-args, incompatible with attr-only).
+      # https://github.com/go-simpler/sloglint?tab=readme-ov-file#key-value-pairs-only
+      # Default: false
+      kv-only: false
+      # Enforce using attributes only (overrides no-mixed-args, incompatible with kv-only).
+      # https://github.com/go-simpler/sloglint?tab=readme-ov-file#attributes-only
+      # Default: false
+      attr-only: false
+      # Enforce not using global loggers.
+      # Values:
+      # - "": disabled
+      # - "all": report all global loggers
+      # - "default": report only the default slog logger
+      # https://github.com/go-simpler/sloglint?tab=readme-ov-file#no-global
+      # Default: ""
+      no-global: ""
+      # Enforce using methods that accept a context.
+      # Values:
+      # - "": disabled
+      # - "all": report all contextless calls
+      # - "scope": report only if a context exists in the scope of the outermost function
+      # https://github.com/go-simpler/sloglint?tab=readme-ov-file#context-only
+      # Default: ""
+      context: ""
+      # Enforce using static values for log messages.
+      # https://github.com/go-simpler/sloglint?tab=readme-ov-file#static-messages
+      # Default: false
+      static-msg: false
+      # Enforce using constants instead of raw keys.
+      # https://github.com/go-simpler/sloglint?tab=readme-ov-file#no-raw-keys
+      # Default: false
+      no-raw-keys: false
+      # Enforce a single key naming convention.
+      # Values: snake, kebab, camel, pascal
+      # https://github.com/go-simpler/sloglint?tab=readme-ov-file#key-naming-convention
+      # Default: ""
+      key-naming-case: ""
+      # Enforce not using specific keys.
+      # Default: []
+      forbidden-keys:
+        - time
+        - level
+        - msg
+        - source
+        - foo
+      # Enforce putting arguments on separate lines.
+      # https://github.com/go-simpler/sloglint?tab=readme-ov-file#forbidden-keys
+      # Default: false
+      args-on-sep-lines: false
+
+linters:
+  disable-all: true
+  enable:
+  - dogsled
+  - errcheck
+  - gci
+  - gocritic
+  - gofmt
+  - goimports
+  - gosimple
+  - govet
+  - ineffassign
+  - misspell
+  - revive
+  - staticcheck
+#  - structcheck
+  - typecheck
+  - unconvert
+  - unparam
+  - whitespace
+  - copyloopvar
+  - sloglint

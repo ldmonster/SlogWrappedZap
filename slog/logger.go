@@ -2,109 +2,238 @@ package slog
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"io"
 	"log/slog"
 	"os"
-	"sync/atomic"
+	"path/filepath"
+	"runtime/debug"
+	"strings"
+
+	logContext "slog-test/slog/context"
 )
 
-var defaultLogger atomic.Pointer[Logger]
-var defaultLevel *Level = new(Level)
+type logger = slog.Logger
+type handlerOptions = *slog.HandlerOptions
 
-func init() {
-	defaultLevel = LevelInfo
-	defaultLogger.Store(New(os.Stdout, JSONHandler, *defaultLevel))
+type Logger struct {
+	*logger
+
+	addSource *bool
+	level     *slog.Level
+	name      string
+
+	slogHandler *SlogHandler
 }
 
-func SetDefault(l *Logger) {
-	defaultLogger.Store(l)
+type Options struct {
+	handlerOptions
+
+	AddSource bool
+	Level     slog.Level
+	Output    io.Writer
 }
 
-func SetDefaultLevel(l Level) {
-	*defaultLevel = l
+func NewNop() *Logger {
+	return &Logger{
+		logger: slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{})),
+	}
 }
 
-func Default() *Logger { return defaultLogger.Load() }
+func NewLogger(opts Options) *Logger {
+	if opts.Output == nil {
+		opts.Output = os.Stdout
+	}
 
-func Trace(msg string, args ...any) {
-	Default().log(context.Background(), LevelTrace, msg, args...)
+	l := &Logger{
+		addSource: &opts.AddSource,
+		level:     &opts.Level,
+	}
+
+	handlerOpts := &slog.HandlerOptions{
+		AddSource: true,
+		Level:     l.level,
+		ReplaceAttr: func(_ []string, a slog.Attr) slog.Attr {
+			switch a.Key {
+			// skip standart fields
+			case slog.LevelKey, slog.MessageKey, slog.TimeKey:
+				return slog.Attr{}
+			case slog.SourceKey:
+				if !*l.addSource {
+					return slog.Attr{}
+				}
+
+				s := a.Value.Any().(*slog.Source)
+
+				dir, file := filepath.Split(s.File)
+
+				a.Value = slog.StringValue(fmt.Sprintf("%s:%d",
+					filepath.Join(filepath.Base(dir), file),
+					s.Line,
+				))
+			default:
+				key := strings.SplitN(a.Key, ";", 1)
+				if key[0] == "raw" {
+					a.Key = strings.Join(key[1:], ";")
+					a.Value = slog.StringValue(fmt.Sprintf("%#v", a.Value.Any()))
+				}
+			}
+
+			return a
+		},
+	}
+
+	l.slogHandler = NewHandler(opts.Output, handlerOpts)
+
+	l.logger = slog.New(l.slogHandler.WithAttrs(nil))
+
+	return l
 }
 
-func Tracef(format string, args ...any) {
-	Default().logf(context.Background(), LevelTrace, format, args...)
+func (l *Logger) SetLevel(level Level) {
+	*l.addSource = slog.Level(level) <= slog.LevelDebug
+
+	*l.level = slog.Level(level)
 }
 
-func TraceContext(ctx context.Context, msg string, args ...any) {
-	Default().log(ctx, LevelTrace, msg, args...)
+func (l *Logger) SetOutput(w io.Writer) {
+	l.slogHandler.w = w
 }
 
-func Debug(msg string, args ...any) {
-	Default().log(context.Background(), LevelDebug, msg, args...)
+func (l *Logger) Named(name string) *Logger {
+	currName := name
+	if l.name != "" {
+		currName = fmt.Sprintf("%s.%s", l.name, name)
+	}
+
+	return &Logger{
+		logger:    l.logger.With(slog.String("logger", currName)),
+		addSource: l.addSource,
+		level:     l.level,
+		name:      currName,
+	}
 }
 
-func Debugf(format string, args ...any) {
-	Default().logf(context.Background(), LevelDebug, format, args...)
+func (l *Logger) With(args ...any) *Logger {
+	return &Logger{
+		logger:    l.logger.With(args...),
+		addSource: l.addSource,
+		level:     l.level,
+		name:      l.name,
+	}
 }
 
-func DebugContext(ctx context.Context, msg string, args ...any) {
-	Default().log(ctx, LevelDebug, msg, args...)
+func (l *Logger) WithGroup(name string) *Logger {
+	return &Logger{
+		logger:    l.logger.WithGroup(name),
+		addSource: l.addSource,
+		level:     l.level,
+		name:      l.name,
+	}
 }
 
-func Info(msg string, args ...any) {
-	Default().log(context.Background(), LevelInfo, msg, args...)
+func (l *Logger) Trace(msg string, args ...any) {
+	ctx := logContext.SetCustomKeyContext(context.Background())
+	ctx = logContext.SetStackTraceContext(ctx, getStack())
+
+	l.Log(ctx, LevelTrace.Level(), msg, args...)
 }
 
-func Infof(format string, args ...any) {
-	Default().logf(context.Background(), LevelInfo, format, args...)
+func (l *Logger) Tracef(format string, args ...any) {
+	ctx := logContext.SetCustomKeyContext(context.Background())
+	ctx = logContext.SetStackTraceContext(ctx, getStack())
+
+	l.Log(ctx, LevelTrace.Level(), fmt.Sprintf(format, args...))
 }
 
-func InfoContext(ctx context.Context, msg string, args ...any) {
-	Default().log(ctx, LevelInfo, msg, args...)
+func (l *Logger) Logf(ctx context.Context, level Level, format string, args ...any) {
+	ctx = logContext.SetCustomKeyContext(ctx)
+	l.Log(ctx, level.Level(), fmt.Sprintf(format, args...))
 }
 
-func Warn(msg string, args ...any) {
-	Default().log(context.Background(), LevelWarn, msg, args...)
+func (l *Logger) Debugf(format string, args ...any) {
+	ctx := logContext.SetCustomKeyContext(context.Background())
+	l.Log(ctx, LevelDebug.Level(), fmt.Sprintf(format, args...))
 }
 
-func Warnf(format string, args ...any) {
-	Default().logf(context.Background(), LevelWarn, format, args...)
+func (l *Logger) Infof(format string, args ...any) {
+	ctx := logContext.SetCustomKeyContext(context.Background())
+	l.Log(ctx, LevelInfo.Level(), fmt.Sprintf(format, args...))
 }
 
-func WarnContext(ctx context.Context, msg string, args ...any) {
-	Default().log(ctx, LevelWarn, msg, args...)
+func (l *Logger) Warnf(format string, args ...any) {
+	ctx := logContext.SetCustomKeyContext(context.Background())
+	l.Log(ctx, LevelWarn.Level(), fmt.Sprintf(format, args...))
 }
 
-func Error(msg string, args ...any) {
-	Default().log(context.Background(), LevelError, msg, args...)
+func (l *Logger) Errorf(format string, args ...any) {
+	ctx := logContext.SetCustomKeyContext(context.Background())
+	l.Log(ctx, LevelError.Level(), fmt.Sprintf(format, args...))
 }
 
-func Errorf(format string, args ...any) {
-	Default().logf(context.Background(), LevelError, format, args...)
+func (l *Logger) Fatal(msg string, args ...any) {
+	ctx := logContext.SetCustomKeyContext(context.Background())
+	ctx = logContext.SetStackTraceContext(ctx, getStack())
+
+	l.Log(ctx, LevelFatal.Level(), msg, args...)
+
+	os.Exit(1)
 }
 
-func ErrorContext(ctx context.Context, msg string, args ...any) {
-	Default().log(ctx, LevelError, msg, args...)
+func (l *Logger) Fatalf(format string, args ...any) {
+	ctx := logContext.SetCustomKeyContext(context.Background())
+	ctx = logContext.SetStackTraceContext(ctx, getStack())
+
+	l.Log(ctx, LevelFatal.Level(), fmt.Sprintf(format, args...))
+
+	os.Exit(1)
 }
 
-func Fatal(msg string, args ...any) {
-	Default().log(context.Background(), LevelFatal, msg, args...)
+func getStack() string {
+	rawstack := string(debug.Stack())
+	rawstack = strings.ReplaceAll(rawstack, "\t", "")
+	splitted := strings.Split(rawstack, "\n")
+
+	splitted = splitted[2:]
+
+	return strings.Join(splitted, "")
 }
 
-func Fatalf(format string, args ...any) {
-	Default().logf(context.Background(), LevelFatal, format, args...)
+func ParseLevel(rawLogLevel string) (Level, error) {
+	switch strings.ToLower(rawLogLevel) {
+	case "trace":
+		return LevelTrace, nil
+	case "debug":
+		return LevelDebug, nil
+	case "info":
+		return LevelInfo, nil
+	case "warn":
+		return LevelWarn, nil
+	case "error":
+		return LevelError, nil
+	case "fatal":
+		return LevelFatal, nil
+	default:
+		return LevelInfo, errors.New("no level found")
+	}
 }
 
-func FatalContext(ctx context.Context, msg string, args ...any) {
-	Default().log(ctx, LevelFatal, msg, args...)
-}
-
-func Log(ctx context.Context, level Level, msg string, args ...any) {
-	Default().log(ctx, level, msg, args...)
-}
-
-func Logf(ctx context.Context, level Level, format string, args ...any) {
-	Default().logf(ctx, level, format, args...)
-}
-
-func LogAttrs(ctx context.Context, level Level, msg string, attrs ...slog.Attr) {
-	Default().logAttrs(ctx, level, msg, attrs...)
+func LogLevelFromStr(rawLogLevel string) Level {
+	switch strings.ToLower(rawLogLevel) {
+	case "trace":
+		return LevelTrace
+	case "debug":
+		return LevelDebug
+	case "info":
+		return LevelInfo
+	case "warn":
+		return LevelWarn
+	case "error":
+		return LevelError
+	case "fatal":
+		return LevelFatal
+	default:
+		return LevelInfo
+	}
 }

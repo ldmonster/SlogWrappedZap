@@ -1,15 +1,15 @@
-package slog
+package wrappedslog
 
 import (
 	"log/slog"
 	"time"
 )
 
-func GetSlogOpts(level *Level) *slog.HandlerOptions {
+func GetSlogOpts() *slog.HandlerOptions {
 	opts := &slog.HandlerOptions{
 		AddSource: true,
-		Level:     level,
-		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
+		Level:     LevelInfo,
+		ReplaceAttr: func(_ []string, a slog.Attr) slog.Attr {
 			if a.Key == slog.LevelKey {
 				level := a.Value.Any().(slog.Level)
 				a.Value = slog.StringValue(Level(level).String())
