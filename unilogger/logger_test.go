@@ -356,9 +356,8 @@ stubArg:
 			buf := bytes.NewBuffer([]byte{})
 
 			logger := unilogger.NewLogger(unilogger.Options{
-				AddSource: tt.args.addSource,
-				Level:     tt.args.level.Level(),
-				Output:    buf,
+				Level:  tt.args.level.Level(),
+				Output: buf,
 				TimeFunc: func(_ time.Time) time.Time {
 					t, err := time.Parse(time.DateTime, "2006-01-02 15:04:05")
 					if err != nil {

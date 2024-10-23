@@ -24,9 +24,9 @@ type handlerOptions = *slog.HandlerOptions
 type Logger struct {
 	*logger
 
-	addSource *bool
-	level     *slog.LevelVar
-	name      string
+	addSourceVar *AddSourceVar
+	level        *slog.LevelVar
+	name         string
 
 	slogHandler *SlogHandler
 }
@@ -34,9 +34,8 @@ type Logger struct {
 type Options struct {
 	handlerOptions
 
-	AddSource bool
-	Level     slog.Level
-	Output    io.Writer
+	Level  slog.Level
+	Output io.Writer
 
 	TimeFunc func(t time.Time) time.Time
 }
@@ -59,11 +58,11 @@ func NewLogger(opts Options) *Logger {
 	}
 
 	l := &Logger{
-		addSource: &opts.AddSource,
-		level:     new(slog.LevelVar),
+		addSourceVar: new(AddSourceVar),
+		level:        new(slog.LevelVar),
 	}
 
-	l.level.Set(opts.Level)
+	l.SetLevel(Level(opts.Level))
 
 	// getting absolute binary path
 	binaryPath := filepath.Dir(os.Args[0])
@@ -81,7 +80,7 @@ func NewLogger(opts Options) *Logger {
 			case slog.LevelKey, slog.MessageKey, slog.TimeKey:
 				return slog.Attr{}
 			case slog.SourceKey:
-				if !*l.addSource {
+				if !*l.addSourceVar.Source() {
 					return slog.Attr{}
 				}
 
@@ -124,7 +123,7 @@ func NewLogger(opts Options) *Logger {
 }
 
 func (l *Logger) SetLevel(level Level) {
-	*l.addSource = slog.Level(level) <= slog.LevelDebug
+	l.addSourceVar.Set(slog.Level(level) <= slog.LevelDebug)
 
 	l.level.Set(slog.Level(level))
 }
@@ -140,28 +139,28 @@ func (l *Logger) Named(name string) *Logger {
 	}
 
 	return &Logger{
-		logger:    l.logger.With(slog.String("logger", currName)),
-		addSource: l.addSource,
-		level:     l.level,
-		name:      currName,
+		logger:       l.logger.With(slog.String("logger", currName)),
+		addSourceVar: l.addSourceVar,
+		level:        l.level,
+		name:         currName,
 	}
 }
 
 func (l *Logger) With(args ...any) *Logger {
 	return &Logger{
-		logger:    l.logger.With(args...),
-		addSource: l.addSource,
-		level:     l.level,
-		name:      l.name,
+		logger:       l.logger.With(args...),
+		addSourceVar: l.addSourceVar,
+		level:        l.level,
+		name:         l.name,
 	}
 }
 
 func (l *Logger) WithGroup(name string) *Logger {
 	return &Logger{
-		logger:    l.logger.WithGroup(name),
-		addSource: l.addSource,
-		level:     l.level,
-		name:      l.name,
+		logger:       l.logger.WithGroup(name),
+		addSourceVar: l.addSourceVar,
+		level:        l.level,
+		name:         l.name,
 	}
 }
 

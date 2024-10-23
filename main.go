@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	stdslog "log/slog"
+	"time"
 
 	"slog-test/unilogger"
 )
@@ -61,6 +62,13 @@ func initWrappedSlogSlog() {
 	unilogger.Error("we can see dat", "int attr", 42, stdslog.String("str arg", "lol"))
 	// unilogger.Fatal("we can see dat", "int attr", 42, stdslog.String("str arg", "lol"))
 
+	unilogger.SetDefaultLevel(unilogger.LevelInfo)
+	fmt.Println("INFO LEVEL")
+	unilogger.Debug("we cant see dat", "int attr", 42, stdslog.String("str arg", "lol"))
+	unilogger.Info("we can see dat", "int attr", 42, stdslog.String("str arg", "lol"))
+	unilogger.Warn("we can see dat", "int attr", 42, stdslog.String("str arg", "lol"))
+	unilogger.Error("we can see dat", "int attr", 42, stdslog.String("str arg", "lol"))
+
 	first := logger.Named("first")
 	second := first.Named("second")
 	third := second.Named("third")
@@ -68,6 +76,30 @@ func initWrappedSlogSlog() {
 	third.Error("well shit")
 	second.Error("well shit")
 	first.Error("well shit")
+}
+
+func parallelSourceTest() {
+	logger := unilogger.NewLogger(unilogger.Options{
+		Level: unilogger.LevelInfo.Level(),
+		// Output: os.Stdout,
+	})
+
+	go func() {
+		for range 1000000 {
+			go func() {
+				logger.SetLevel(unilogger.LevelDebug)
+				logger.Info("stub msg", slog.Any("time", "kekerity"))
+				logger.SetLevel(unilogger.LevelInfo)
+				logger.Info("stub msg", slog.Any("time", "kekerity"))
+				logger.SetLevel(unilogger.LevelDebug)
+				logger.Info("stub msg", slog.Any("time", "kekerity"))
+				logger.SetLevel(unilogger.LevelInfo)
+				logger.Info("stub msg", slog.Any("time", "kekerity"))
+			}()
+		}
+	}()
+
+	time.Sleep(5 * time.Minute)
 }
 
 // func initZapInSlog() {
