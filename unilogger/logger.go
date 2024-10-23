@@ -241,7 +241,7 @@ func getStack() string {
 
 	split = split[7:]
 
-	return strings.Join(split, "")
+	return strings.Join(split, " ")
 }
 
 func ParseLevel(rawLogLevel string) (Level, error) {
