@@ -116,16 +116,19 @@ func WarnContext(ctx context.Context, msg string, args ...any) {
 
 func Error(msg string, args ...any) {
 	ctx := logContext.SetCustomKeyContext(context.Background())
+	ctx = logContext.SetStackTraceContext(ctx, getStack())
 	Default().Log(ctx, LevelError.Level(), msg, args...)
 }
 
 func Errorf(format string, args ...any) {
 	ctx := logContext.SetCustomKeyContext(context.Background())
+	ctx = logContext.SetStackTraceContext(ctx, getStack())
 	Default().Log(ctx, LevelError.Level(), format, args...)
 }
 
 func ErrorContext(ctx context.Context, msg string, args ...any) {
 	ctx = logContext.SetCustomKeyContext(ctx)
+	ctx = logContext.SetStackTraceContext(ctx, getStack())
 	Default().Log(ctx, LevelError.Level(), msg, args...)
 }
 

@@ -2,6 +2,7 @@ package unilogger
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -13,6 +14,8 @@ import (
 	"time"
 
 	logContext "slog-test/unilogger/context"
+
+	"gopkg.in/yaml.v3"
 )
 
 type logger = slog.Logger
@@ -22,7 +25,7 @@ type Logger struct {
 	*logger
 
 	addSource *bool
-	level     *slog.Level
+	level     *slog.LevelVar
 	name      string
 
 	slogHandler *SlogHandler
@@ -57,15 +60,24 @@ func NewLogger(opts Options) *Logger {
 
 	l := &Logger{
 		addSource: &opts.AddSource,
-		level:     &opts.Level,
+		level:     new(slog.LevelVar),
+	}
+
+	l.level.Set(opts.Level)
+
+	// getting absolute binary path
+	binaryPath := filepath.Dir(os.Args[0])
+	// if it's go-build temporary folder
+	if strings.Contains(binaryPath, "go-build") {
+		binaryPath, _ = filepath.Abs("./../")
 	}
 
 	handlerOpts := &slog.HandlerOptions{
 		AddSource: true,
 		Level:     l.level,
-		ReplaceAttr: func(_ []string, a slog.Attr) slog.Attr {
+		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
 			switch a.Key {
-			// skip standart fields
+			// skip standard fields
 			case slog.LevelKey, slog.MessageKey, slog.TimeKey:
 				return slog.Attr{}
 			case slog.SourceKey:
@@ -75,17 +87,28 @@ func NewLogger(opts Options) *Logger {
 
 				s := a.Value.Any().(*slog.Source)
 
-				dir, file := filepath.Split(s.File)
-
 				a.Value = slog.StringValue(fmt.Sprintf("%s:%d",
-					filepath.Join(filepath.Base(dir), file),
+					// trim all folders before project root
+					// trim first '/'
+					strings.TrimPrefix(s.File, binaryPath)[1:],
 					s.Line,
 				))
 			default:
-				key := strings.SplitN(a.Key, ";", 1)
+				key := strings.SplitN(a.Key, ";", 3)
 				if key[0] == "raw" {
 					a.Key = strings.Join(key[1:], ";")
-					a.Value = slog.StringValue(fmt.Sprintf("%#v", a.Value.Any()))
+					raw := make(map[string]any, 1)
+
+					switch key[1] {
+					case "json":
+						if err := json.Unmarshal([]byte(a.Value.String()), &raw); err == nil {
+							a.Value = slog.AnyValue(raw)
+						}
+					case "yaml":
+						if err := yaml.Unmarshal([]byte(a.Value.String()), &raw); err == nil {
+							a.Value = slog.AnyValue(raw)
+						}
+					}
 				}
 			}
 
@@ -103,7 +126,7 @@ func NewLogger(opts Options) *Logger {
 func (l *Logger) SetLevel(level Level) {
 	*l.addSource = slog.Level(level) <= slog.LevelDebug
 
-	*l.level = slog.Level(level)
+	l.level.Set(slog.Level(level))
 }
 
 func (l *Logger) SetOutput(w io.Writer) {
@@ -176,8 +199,17 @@ func (l *Logger) Warnf(format string, args ...any) {
 	l.Log(ctx, LevelWarn.Level(), fmt.Sprintf(format, args...))
 }
 
+func (l *Logger) Error(msg string, args ...any) {
+	ctx := logContext.SetCustomKeyContext(context.Background())
+	ctx = logContext.SetStackTraceContext(ctx, getStack())
+
+	l.Log(ctx, LevelError.Level(), msg, args...)
+}
+
 func (l *Logger) Errorf(format string, args ...any) {
 	ctx := logContext.SetCustomKeyContext(context.Background())
+	ctx = logContext.SetStackTraceContext(ctx, getStack())
+
 	l.Log(ctx, LevelError.Level(), fmt.Sprintf(format, args...))
 }
 
@@ -202,11 +234,11 @@ func (l *Logger) Fatalf(format string, args ...any) {
 func getStack() string {
 	rawstack := string(debug.Stack())
 	rawstack = strings.ReplaceAll(rawstack, "\t", "")
-	splitted := strings.Split(rawstack, "\n")
+	split := strings.Split(rawstack, "\n")
 
-	splitted = splitted[2:]
+	split = split[7:]
 
-	return strings.Join(splitted, "")
+	return strings.Join(split, "")
 }
 
 func ParseLevel(rawLogLevel string) (Level, error) {

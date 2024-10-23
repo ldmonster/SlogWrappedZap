@@ -55,14 +55,19 @@ func (h *SlogHandler) Handle(ctx context.Context, r slog.Record) error {
 	}()
 
 	var (
-		fields   = make(map[string]interface{}, r.NumAttrs())
 		out      []byte
 		tracePtr *string
 	)
 
 	isCustom := logContext.GetCustomKeyContext(ctx)
 	if isCustom {
-		r.PC, _, _, _ = runtime.Caller(4)
+		// r.PC, _, _, _ = runtime.Caller(4)
+		var pc uintptr
+		var pcs [1]uintptr
+		// skip [runtime.Callers, this function, this function's caller]
+		runtime.Callers(5, pcs[:])
+		pc = pcs[0]
+		r.PC = pc
 
 		tracePtr = logContext.GetStackTraceContext(ctx)
 	}
@@ -76,10 +81,6 @@ func (h *SlogHandler) Handle(ctx context.Context, r slog.Record) error {
 		return err
 	}
 
-	for k, v := range attrs {
-		fields[k] = v
-	}
-
 	// HEAD start
 	var headLogFields []string
 	lvl := fmt.Sprintf(`"level":"%s"`, strings.ToLower(Level(r.Level).String()))
@@ -89,12 +90,12 @@ func (h *SlogHandler) Handle(ctx context.Context, r slog.Record) error {
 	headLogFields = append(headLogFields, lvl)
 
 	// if logger was named
-	loggerName, ok := fields["logger"]
+	loggerName, ok := attrs["logger"]
 	if ok {
 		name := fmt.Sprintf(`"logger":"%s"`, loggerName)
 		headLogFields = append(headLogFields, name)
 
-		delete(fields, "logger")
+		delete(attrs, "logger")
 	}
 
 	headLogFields = append(headLogFields, msg)
@@ -104,21 +105,23 @@ func (h *SlogHandler) Handle(ctx context.Context, r slog.Record) error {
 
 	// if logger was named
 	if tracePtr != nil {
-		trace := fmt.Sprintf(`"trace":"%s"`, *tracePtr)
+		trace := fmt.Sprintf(`"stacktrace":"%s"`, *tracePtr)
 		footLogFields = append(footLogFields, trace)
+
+		delete(attrs, "source")
 	}
 
 	footLogFields = append(footLogFields, time)
 
-	fieldSource, ok := fields["source"]
+	fieldSource, ok := attrs["source"]
 	if ok {
 		src := fmt.Sprintf(`"source":"%s"`, fieldSource)
 		headLogFields = append(headLogFields, src)
 
-		delete(fields, "source")
+		delete(attrs, "source")
 	}
 
-	b, err := json.Marshal(fields)
+	b, err := json.Marshal(attrs)
 	if err != nil {
 		return err
 	}
@@ -132,7 +135,7 @@ func (h *SlogHandler) Handle(ctx context.Context, r slog.Record) error {
 
 	out = append(out, ',')
 
-	if len(fields) > 0 {
+	if len(attrs) > 0 {
 		out = append(out, b[1:len(b)-1]...)
 		out = append(out, ',')
 	}

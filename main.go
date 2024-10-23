@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 	stdslog "log/slog"
 
 	"slog-test/unilogger"
@@ -11,14 +12,33 @@ func main() {
 	initWrappedSlogSlog()
 }
 
+type Alert struct {
+	Msg   string
+	Time  string
+	Level string
+}
+
 func initWrappedSlogSlog() {
 	logger := unilogger.NewLogger(unilogger.Options{
 		Level: unilogger.LevelInfo.Level(),
 		// Output: os.Stdout,
 	})
-	// newLogger := logger.WithGroup("module")
 
-	// unilogger.SetDefault(logger)
+	newLogger := logger.WithGroup("module")
+
+	newLogger.Info("we can see dat", slog.Any("helm", &Alert{
+		Msg:   "some message",
+		Time:  "some time",
+		Level: "some level",
+	}))
+	newLogger.Info("we can see dat", slog.Any("helm", map[string]string{
+		"msg":   "some message",
+		"time":  "some time",
+		"level": "some level",
+	}))
+	newLogger.Info("we can see dat", slog.String("raw;json;some log", `{"time":"value"}`))
+
+	unilogger.SetDefault(logger)
 
 	fmt.Println("INFO LEVEL")
 	unilogger.Debug("we cant see dat", "int attr", 42, stdslog.String("str arg", "lol"))
@@ -28,7 +48,7 @@ func initWrappedSlogSlog() {
 
 	unilogger.SetDefaultLevel(unilogger.LevelDebug)
 	fmt.Println("DEBUG LEVEL")
-	unilogger.Debug("we can see dat", "int attr", 42, stdslog.String("str arg", "lol"))
+	logger.Debugf("we can see dat %s %d %v", "int attr", 42, stdslog.String("str arg", "lol"))
 	unilogger.Info("we can see dat" /* "int attr", 42, stdslog.String("str arg", "lol")*/)
 	unilogger.Warn("we can see dat", "int attr", 42, stdslog.String("str arg", "lol"))
 	unilogger.Error("we can see dat", "int attr", 42, stdslog.String("str arg", "lol"))
@@ -39,7 +59,7 @@ func initWrappedSlogSlog() {
 	unilogger.Info("we cant see dat", "int attr", 42, stdslog.String("str arg", "lol"))
 	unilogger.Warn("we cant see dat", "int attr", 42, stdslog.String("str arg", "lol"))
 	unilogger.Error("we can see dat", "int attr", 42, stdslog.String("str arg", "lol"))
-	unilogger.Fatal("we can see dat", "int attr", 42, stdslog.String("str arg", "lol"))
+	// unilogger.Fatal("we can see dat", "int attr", 42, stdslog.String("str arg", "lol"))
 
 	first := logger.Named("first")
 	second := first.Named("second")
@@ -48,7 +68,6 @@ func initWrappedSlogSlog() {
 	third.Error("well shit")
 	second.Error("well shit")
 	first.Error("well shit")
-
 }
 
 // func initZapInSlog() {

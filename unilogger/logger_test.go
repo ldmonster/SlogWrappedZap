@@ -4,9 +4,10 @@ import (
 	"bytes"
 	"context"
 	"log/slog"
-	"slog-test/unilogger"
 	"testing"
 	"time"
+
+	"slog-test/unilogger"
 
 	"github.com/alecthomas/assert/v2"
 )
@@ -24,13 +25,24 @@ func Test_Logger(t *testing.T) {
 		logger.Log(context.Background(), unilogger.LevelFatal.Level(), "stub msg", slog.String("stub_arg", "arg"))
 	}
 
+	logfFn := func(logger *unilogger.Logger) {
+		logger.Tracef("stub msg: %s", "arg")
+		logger.Debugf("stub msg: %s", "arg")
+		logger.Infof("stub msg: %s", "arg")
+		logger.Warnf("stub msg: %s", "arg")
+		logger.Errorf("stub msg: %s", "arg")
+		//test fatal
+		logger.Logf(context.Background(), unilogger.LevelFatal, "stub msg: %s", "arg")
+	}
+
 	type meta struct {
 		name    string
 		enabled bool
 	}
 
 	type fields struct {
-		logfn func(logger *unilogger.Logger)
+		logfn          func(logger *unilogger.Logger)
+		mutateLoggerfn func(logger *unilogger.Logger) *unilogger.Logger
 	}
 
 	type args struct {
@@ -55,14 +67,15 @@ func Test_Logger(t *testing.T) {
 				enabled: true,
 			},
 			fields: fields{
-				logfn: func(logger *unilogger.Logger) {},
+				logfn:          defaultLogFn,
+				mutateLoggerfn: func(logger *unilogger.Logger) *unilogger.Logger { return logger },
 			},
 			args: args{},
 			wants: wants{
 				shouldContains: []string{
 					`{"level":"info","msg":"stub msg","stub_arg":"arg","time":"2006-01-02T15:04:05Z"}`,
 					`{"level":"warn","msg":"stub msg","stub_arg":"arg","time":"2006-01-02T15:04:05Z"}`,
-					`{"level":"error","msg":"stub msg","stub_arg":"arg","time":"2006-01-02T15:04:05Z"}`,
+					`{"level":"error","msg":"stub msg","stub_arg":"arg","stacktrace":`,
 					`{"level":"fatal","msg":"stub msg","stub_arg":"arg","time":"2006-01-02T15:04:05Z"}`,
 				},
 				shouldNotContains: []string{
@@ -77,22 +90,257 @@ func Test_Logger(t *testing.T) {
 				enabled: true,
 			},
 			fields: fields{
-				logfn: func(logger *unilogger.Logger) {
+				logfn: defaultLogFn,
+				mutateLoggerfn: func(logger *unilogger.Logger) *unilogger.Logger {
 					logger.SetLevel(unilogger.LevelDebug)
+
+					return logger
 				},
 			},
 			args: args{
-				level: unilogger.LevelInfo,
+				addSource: false,
+				level:     unilogger.LevelInfo,
 			},
 			wants: wants{
 				shouldContains: []string{
-					`{"level":"debug","msg":"stub msg","source":"unilogger/logger_test.go:19","stub_arg":"arg","time":"2006-01-02T15:04:05Z"}`,
-					`{"level":"info","msg":"stub msg","source":"unilogger/logger_test.go:20","stub_arg":"arg","time":"2006-01-02T15:04:05Z"}`,
-					`{"level":"warn","msg":"stub msg","source":"unilogger/logger_test.go:21","stub_arg":"arg","time":"2006-01-02T15:04:05Z"}`,
-					`{"level":"error","msg":"stub msg","source":"unilogger/logger_test.go:22","stub_arg":"arg","time":"2006-01-02T15:04:05Z"}`,
-					`{"level":"fatal","msg":"stub msg","source":"unilogger/logger_test.go:24","stub_arg":"arg","time":"2006-01-02T15:04:05Z"}`,
+					`{"level":"debug","msg":"stub msg","source":"unilogger/logger_test.go:20","stub_arg":"arg","time":"2006-01-02T15:04:05Z"}`,
+					`{"level":"info","msg":"stub msg","source":"unilogger/logger_test.go:21","stub_arg":"arg","time":"2006-01-02T15:04:05Z"}`,
+					`{"level":"warn","msg":"stub msg","source":"unilogger/logger_test.go:22","stub_arg":"arg","time":"2006-01-02T15:04:05Z"}`,
+					`{"level":"error","msg":"stub msg","stub_arg":"arg","stacktrace":`,
+					`{"level":"fatal","msg":"stub msg","source":"unilogger/logger_test.go:25","stub_arg":"arg","time":"2006-01-02T15:04:05Z"}`,
 				},
 				shouldNotContains: []string{
+					`"level":"trace"`,
+				},
+			},
+		},
+		{
+			meta: meta{
+				name:    "*f functions logger change to debug level should contains addsource and debug level",
+				enabled: true,
+			},
+			fields: fields{
+				logfn: logfFn,
+				mutateLoggerfn: func(logger *unilogger.Logger) *unilogger.Logger {
+					logger.SetLevel(unilogger.LevelDebug)
+
+					return logger
+				},
+			},
+			args: args{
+				addSource: false,
+				level:     unilogger.LevelInfo,
+			},
+			wants: wants{
+				shouldContains: []string{
+					`{"level":"debug","msg":"stub msg: arg","source":"unilogger/logger_test.go:30","time":"2006-01-02T15:04:05Z"}`,
+					`{"level":"info","msg":"stub msg: arg","source":"unilogger/logger_test.go:31","time":"2006-01-02T15:04:05Z"}`,
+					`{"level":"warn","msg":"stub msg: arg","source":"unilogger/logger_test.go:32","time":"2006-01-02T15:04:05Z"}`,
+					`{"level":"error","msg":"stub msg: arg","stacktrace":`,
+					`{"level":"fatal","msg":"stub msg: arg","source":"unilogger/logger_test.go:35","time":"2006-01-02T15:04:05Z"}`,
+				},
+				shouldNotContains: []string{
+					`"level":"trace"`,
+				},
+			},
+		},
+		{
+			meta: meta{
+				name:    "logger with name should have field logger",
+				enabled: true,
+			},
+			fields: fields{
+				logfn: defaultLogFn,
+				mutateLoggerfn: func(logger *unilogger.Logger) *unilogger.Logger {
+					return logger.Named("first")
+				},
+			},
+			args: args{
+				addSource: false,
+				level:     unilogger.LevelInfo,
+			},
+			wants: wants{
+				shouldContains: []string{
+					`{"level":"info","logger":"first","msg":"stub msg","stub_arg":"arg","time":"2006-01-02T15:04:05Z"}`,
+					`{"level":"warn","logger":"first","msg":"stub msg","stub_arg":"arg","time":"2006-01-02T15:04:05Z"}`,
+					`{"level":"error","logger":"first","msg":"stub msg","stub_arg":"arg","stacktrace":`,
+					`{"level":"fatal","logger":"first","msg":"stub msg","stub_arg":"arg","time":"2006-01-02T15:04:05Z"}`},
+				shouldNotContains: []string{
+					`"level":"debug"`,
+					`"level":"trace"`,
+				},
+			},
+		},
+		{
+			meta: meta{
+				name:    "logger names should separate by dot",
+				enabled: true,
+			},
+			fields: fields{
+				logfn: defaultLogFn,
+				mutateLoggerfn: func(logger *unilogger.Logger) *unilogger.Logger {
+					logger = logger.Named("first")
+					logger = logger.Named("second")
+					return logger.Named("third")
+				},
+			},
+			args: args{
+				addSource: false,
+				level:     unilogger.LevelInfo,
+			},
+			wants: wants{
+				shouldContains: []string{
+					`{"level":"info","logger":"first.second.third","msg":"stub msg","stub_arg":"arg","time":"2006-01-02T15:04:05Z"}`,
+					`{"level":"warn","logger":"first.second.third","msg":"stub msg","stub_arg":"arg","time":"2006-01-02T15:04:05Z"}`,
+					`{"level":"error","logger":"first.second.third","msg":"stub msg","stub_arg":"arg","stacktrace":`,
+					`{"level":"fatal","logger":"first.second.third","msg":"stub msg","stub_arg":"arg","time":"2006-01-02T15:04:05Z"}`,
+				},
+				shouldNotContains: []string{
+					`"level":"debug"`,
+					`"level":"trace"`,
+				},
+			},
+		},
+		{
+			meta: meta{
+				name:    "with group should wrap args",
+				enabled: true,
+			},
+			fields: fields{
+				logfn: defaultLogFn,
+				mutateLoggerfn: func(logger *unilogger.Logger) *unilogger.Logger {
+					return logger.WithGroup("module")
+				},
+			},
+			args: args{
+				addSource: false,
+				level:     unilogger.LevelInfo,
+			},
+			wants: wants{
+				shouldContains: []string{
+					`{"level":"info","msg":"stub msg","module":{"stub_arg":"arg"},"time":"2006-01-02T15:04:05Z"}`,
+					`{"level":"warn","msg":"stub msg","module":{"stub_arg":"arg"},"time":"2006-01-02T15:04:05Z"}`,
+					`{"level":"error","msg":"stub msg","module":{"stub_arg":"arg"},"stacktrace":`,
+					`{"level":"fatal","msg":"stub msg","module":{"stub_arg":"arg"},"time":"2006-01-02T15:04:05Z"}`,
+				},
+				shouldNotContains: []string{
+					`"level":"debug"`,
+					`"level":"trace"`,
+				},
+			},
+		},
+		{
+			meta: meta{
+				name:    "raw json arg should be formatted like structure",
+				enabled: true,
+			},
+			fields: fields{
+				logfn: defaultLogFn,
+				mutateLoggerfn: func(logger *unilogger.Logger) *unilogger.Logger {
+					return logger.With("raw;json;stub log", `{"stub arg":{"nested arg":"some"}}`)
+				},
+			},
+			args: args{
+				addSource: false,
+				level:     unilogger.LevelInfo,
+			},
+			wants: wants{
+				shouldContains: []string{
+					`{"level":"info","msg":"stub msg","json;stub log":{"stub arg":{"nested arg":"some"}},"stub_arg":"arg","time":"2006-01-02T15:04:05Z"}`,
+					`{"level":"warn","msg":"stub msg","json;stub log":{"stub arg":{"nested arg":"some"}},"stub_arg":"arg","time":"2006-01-02T15:04:05Z"}`,
+					`{"level":"error","msg":"stub msg","json;stub log":{"stub arg":{"nested arg":"some"}},"stub_arg":"arg","stacktrace":`,
+					`{"level":"fatal","msg":"stub msg","json;stub log":{"stub arg":{"nested arg":"some"}},"stub_arg":"arg","time":"2006-01-02T15:04:05Z"}`,
+				},
+				shouldNotContains: []string{
+					`"level":"debug"`,
+					`"level":"trace"`,
+				},
+			},
+		},
+		{
+			meta: meta{
+				name:    "raw yaml arg should be formatted like structure",
+				enabled: true,
+			},
+			fields: fields{
+				logfn: defaultLogFn,
+				mutateLoggerfn: func(logger *unilogger.Logger) *unilogger.Logger {
+					return logger.With("raw;yaml;stub log", `
+stubArg:
+  nestedArg: some`)
+				},
+			},
+			args: args{
+				addSource: false,
+				level:     unilogger.LevelInfo,
+			},
+			wants: wants{
+				shouldContains: []string{
+					`{"level":"info","msg":"stub msg","stub_arg":"arg","yaml;stub log":{"stubArg":{"nestedArg":"some"}},"time":"2006-01-02T15:04:05Z"}`,
+					`{"level":"warn","msg":"stub msg","stub_arg":"arg","yaml;stub log":{"stubArg":{"nestedArg":"some"}},"time":"2006-01-02T15:04:05Z"}`,
+					`{"level":"error","msg":"stub msg","stub_arg":"arg","yaml;stub log":{"stubArg":{"nestedArg":"some"}},"stacktrace":`,
+					`{"level":"fatal","msg":"stub msg","stub_arg":"arg","yaml;stub log":{"stubArg":{"nestedArg":"some"}},"time":"2006-01-02T15:04:05Z"}`,
+				},
+				shouldNotContains: []string{
+					`"level":"debug"`,
+					`"level":"trace"`,
+				},
+			},
+		},
+		{
+			meta: meta{
+				name:    "raw arg should be formatted",
+				enabled: true,
+			},
+			fields: fields{
+				logfn: defaultLogFn,
+				mutateLoggerfn: func(logger *unilogger.Logger) *unilogger.Logger {
+					return logger.With("raw;stub log", `error: value {"cmd":"corrupted"}`)
+				},
+			},
+			args: args{
+				addSource: false,
+				level:     unilogger.LevelInfo,
+			},
+			wants: wants{
+				shouldContains: []string{
+					`{"level":"info","msg":"stub msg","stub log":"error: value {\"cmd\":\"corrupted\"}","stub_arg":"arg","time":"2006-01-02T15:04:05Z"}`,
+					`{"level":"warn","msg":"stub msg","stub log":"error: value {\"cmd\":\"corrupted\"}","stub_arg":"arg","time":"2006-01-02T15:04:05Z"}`,
+					`{"level":"error","msg":"stub msg","stub log":"error: value {\"cmd\":\"corrupted\"}","stub_arg":"arg","stacktrace":`,
+					`{"level":"fatal","msg":"stub msg","stub log":"error: value {\"cmd\":\"corrupted\"}","stub_arg":"arg","time":"2006-01-02T15:04:05Z"}`,
+				},
+				shouldNotContains: []string{
+					`"level":"debug"`,
+					`"level":"trace"`,
+				},
+			},
+		},
+		{
+			meta: meta{
+				name:    "default logger level change must affect logger which set default",
+				enabled: true,
+			},
+			fields: fields{
+				logfn: defaultLogFn,
+				mutateLoggerfn: func(logger *unilogger.Logger) *unilogger.Logger {
+					unilogger.SetDefault(logger)
+					unilogger.SetDefaultLevel(unilogger.LevelError)
+					return logger
+				},
+			},
+			args: args{
+				addSource: false,
+				level:     unilogger.LevelInfo,
+			},
+			wants: wants{
+				shouldContains: []string{
+					`{"level":"error","msg":"stub msg","stub_arg":"arg","stacktrace":`,
+					`{"level":"fatal","msg":"stub msg","stub_arg":"arg","time":"2006-01-02T15:04:05Z"}`,
+				},
+				shouldNotContains: []string{
+					`"level":"info"`,
+					`"level":"warn"`,
+					`"level":"debug"`,
 					`"level":"trace"`,
 				},
 			},
@@ -121,9 +369,9 @@ func Test_Logger(t *testing.T) {
 				},
 			})
 
-			tt.fields.logfn(logger)
+			logger = tt.fields.mutateLoggerfn(logger)
 
-			defaultLogFn(logger)
+			tt.fields.logfn(logger)
 
 			for _, v := range tt.wants.shouldContains {
 				assert.Contains(t, buf.String(), v)
