@@ -2,7 +2,6 @@ package unilogger
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -14,8 +13,6 @@ import (
 	"time"
 
 	logContext "slog-test/unilogger/context"
-
-	"gopkg.in/yaml.v3"
 )
 
 type logger = slog.Logger
@@ -92,23 +89,6 @@ func NewLogger(opts Options) *Logger {
 					strings.TrimPrefix(s.File, binaryPath)[1:],
 					s.Line,
 				))
-			default:
-				key := strings.SplitN(a.Key, ";", 3)
-				if key[0] == "raw" {
-					a.Key = strings.Join(key[1:], ";")
-					raw := make(map[string]any, 1)
-
-					switch key[1] {
-					case "json":
-						if err := json.Unmarshal([]byte(a.Value.String()), &raw); err == nil {
-							a.Value = slog.AnyValue(raw)
-						}
-					case "yaml":
-						if err := yaml.Unmarshal([]byte(a.Value.String()), &raw); err == nil {
-							a.Value = slog.AnyValue(raw)
-						}
-					}
-				}
 			}
 
 			return a

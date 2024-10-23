@@ -37,7 +37,7 @@ func initWrappedSlogSlog() {
 		"time":  "some time",
 		"level": "some level",
 	}))
-	newLogger.Info("we can see dat", slog.String("raw;json;some log", `{"time":"value"}`))
+	newLogger.Info("we can see dat", unilogger.RawJSON("kek", `{"time":"value"}`))
 
 	unilogger.SetDefault(logger)
 

@@ -237,7 +237,7 @@ func Test_Logger(t *testing.T) {
 			fields: fields{
 				logfn: defaultLogFn,
 				mutateLoggerfn: func(logger *unilogger.Logger) *unilogger.Logger {
-					return logger.With("raw;json;stub log", `{"stub arg":{"nested arg":"some"}}`)
+					return logger.With(unilogger.RawJSON("stub log", `{"stub arg":{"nested arg":"some"}}`))
 				},
 			},
 			args: args{
@@ -246,10 +246,10 @@ func Test_Logger(t *testing.T) {
 			},
 			wants: wants{
 				shouldContains: []string{
-					`{"level":"info","msg":"stub msg","json;stub log":{"stub arg":{"nested arg":"some"}},"stub_arg":"arg","time":"2006-01-02T15:04:05Z"}`,
-					`{"level":"warn","msg":"stub msg","json;stub log":{"stub arg":{"nested arg":"some"}},"stub_arg":"arg","time":"2006-01-02T15:04:05Z"}`,
-					`{"level":"error","msg":"stub msg","json;stub log":{"stub arg":{"nested arg":"some"}},"stub_arg":"arg","stacktrace":`,
-					`{"level":"fatal","msg":"stub msg","json;stub log":{"stub arg":{"nested arg":"some"}},"stub_arg":"arg","time":"2006-01-02T15:04:05Z"}`,
+					`{"level":"info","msg":"stub msg","stub log":{"stub arg":{"nested arg":"some"}},"stub_arg":"arg","time":"2006-01-02T15:04:05Z"}`,
+					`{"level":"warn","msg":"stub msg","stub log":{"stub arg":{"nested arg":"some"}},"stub_arg":"arg","time":"2006-01-02T15:04:05Z"}`,
+					`{"level":"error","msg":"stub msg","stub log":{"stub arg":{"nested arg":"some"}},"stub_arg":"arg","stacktrace":`,
+					`{"level":"fatal","msg":"stub msg","stub log":{"stub arg":{"nested arg":"some"}},"stub_arg":"arg","time":"2006-01-02T15:04:05Z"}`,
 				},
 				shouldNotContains: []string{
 					`"level":"debug"`,
@@ -265,9 +265,9 @@ func Test_Logger(t *testing.T) {
 			fields: fields{
 				logfn: defaultLogFn,
 				mutateLoggerfn: func(logger *unilogger.Logger) *unilogger.Logger {
-					return logger.With("raw;yaml;stub log", `
+					return logger.With(unilogger.RawYAML("stub log", `
 stubArg:
-  nestedArg: some`)
+  nestedArg: some`))
 				},
 			},
 			args: args{
@@ -276,38 +276,10 @@ stubArg:
 			},
 			wants: wants{
 				shouldContains: []string{
-					`{"level":"info","msg":"stub msg","stub_arg":"arg","yaml;stub log":{"stubArg":{"nestedArg":"some"}},"time":"2006-01-02T15:04:05Z"}`,
-					`{"level":"warn","msg":"stub msg","stub_arg":"arg","yaml;stub log":{"stubArg":{"nestedArg":"some"}},"time":"2006-01-02T15:04:05Z"}`,
-					`{"level":"error","msg":"stub msg","stub_arg":"arg","yaml;stub log":{"stubArg":{"nestedArg":"some"}},"stacktrace":`,
-					`{"level":"fatal","msg":"stub msg","stub_arg":"arg","yaml;stub log":{"stubArg":{"nestedArg":"some"}},"time":"2006-01-02T15:04:05Z"}`,
-				},
-				shouldNotContains: []string{
-					`"level":"debug"`,
-					`"level":"trace"`,
-				},
-			},
-		},
-		{
-			meta: meta{
-				name:    "raw arg should be formatted",
-				enabled: true,
-			},
-			fields: fields{
-				logfn: defaultLogFn,
-				mutateLoggerfn: func(logger *unilogger.Logger) *unilogger.Logger {
-					return logger.With("raw;stub log", `error: value {"cmd":"corrupted"}`)
-				},
-			},
-			args: args{
-				addSource: false,
-				level:     unilogger.LevelInfo,
-			},
-			wants: wants{
-				shouldContains: []string{
-					`{"level":"info","msg":"stub msg","stub log":"error: value {\"cmd\":\"corrupted\"}","stub_arg":"arg","time":"2006-01-02T15:04:05Z"}`,
-					`{"level":"warn","msg":"stub msg","stub log":"error: value {\"cmd\":\"corrupted\"}","stub_arg":"arg","time":"2006-01-02T15:04:05Z"}`,
-					`{"level":"error","msg":"stub msg","stub log":"error: value {\"cmd\":\"corrupted\"}","stub_arg":"arg","stacktrace":`,
-					`{"level":"fatal","msg":"stub msg","stub log":"error: value {\"cmd\":\"corrupted\"}","stub_arg":"arg","time":"2006-01-02T15:04:05Z"}`,
+					`{"level":"info","msg":"stub msg","stub log":{"stubArg":{"nestedArg":"some"}},"stub_arg":"arg","time":"2006-01-02T15:04:05Z"}`,
+					`{"level":"warn","msg":"stub msg","stub log":{"stubArg":{"nestedArg":"some"}},"stub_arg":"arg","time":"2006-01-02T15:04:05Z"}`,
+					`{"level":"error","msg":"stub msg","stub log":{"stubArg":{"nestedArg":"some"}},"stub_arg":"arg","stacktrace":`,
+					`{"level":"fatal","msg":"stub msg","stub log":{"stubArg":{"nestedArg":"some"}},"stub_arg":"arg","time":"2006-01-02T15:04:05Z"}`,
 				},
 				shouldNotContains: []string{
 					`"level":"debug"`,
