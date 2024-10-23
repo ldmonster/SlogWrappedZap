@@ -122,6 +122,10 @@ func NewLogger(opts Options) *Logger {
 	return l
 }
 
+func (l *Logger) GetLevel() Level {
+	return Level(l.level.Level())
+}
+
 func (l *Logger) SetLevel(level Level) {
 	l.addSourceVar.Set(slog.Level(level) <= slog.LevelDebug)
 
